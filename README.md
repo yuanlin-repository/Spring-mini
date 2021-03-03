@@ -1,2 +1,7 @@
 # Spring-mini
-手写Spring框架，实现IOC，MVC
+参考Spring的IOC，MVC模块，实现的一个简易版的Spring框架
+框架可以读取用户自定义的Properties文件配置自动扫描装配等功能。
+通过反射实现IOC功能和部分依赖注入功能，实现了Autowired，Service，Controller注解。
+实现MVC请求处理，页面渲染功能，实现了RequestMapping，RequestParam注解
+
+可以直接通过maven的Plugins中jetty启动web服务。
