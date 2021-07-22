@@ -2,16 +2,24 @@ package framework.beans.config;
 
 public class MYBeanDefinition {
 
-    // 保存 beanName，作为 bean 的唯一标识
+    /**
+     * 保存 beanName，作为 bean 的唯一标识
+     */
     private String factoryBeanName;
 
-    // 类的全限定类名，为了后面创建实例和注解判断
+    /**
+     * 类的全限定类名，为了后面创建实例和注解判断
+     */
     private String beanClassName;
 
-    // 懒加载
+    /**
+     * 懒加载
+     */
     private boolean isLazyInit = false;
 
-    // 是否单例
+    /**
+     * 是否单例
+     */
     private boolean isSingleton = true;
 
     public String getFactoryBeanName() {

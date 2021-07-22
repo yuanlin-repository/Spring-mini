@@ -1,5 +1,8 @@
 package framework.beans.support;
 
+import framework.annotation.MYComponent;
+import framework.annotation.MYController;
+import framework.annotation.MYService;
 import framework.beans.config.MYBeanDefinition;
 
 import java.io.File;
@@ -15,21 +18,24 @@ import java.util.Properties;
 
 public class MYBeanDefinitionReader {
 
-    // 保存所有 Bean 的 class 信息（全限定类名）
+    /**
+     * 保存所有bean的全限定类名
+     */
     private List<String> registerBeanClasses = new ArrayList<String>();
 
     private Properties config = new Properties();
 
-    // 定义Properties文件中要扫描包的key
+    /**
+     * 扫描路径
+     */
     private final String SCAN_PACKAGE = "scanPackage";
 
     public MYBeanDefinitionReader(String... locations) {
-        // 得到properties文件的IO流
+        // 获取配置文件io流
         InputStream is = null;
         is = this.getClass().getClassLoader().getResourceAsStream(locations[0].replace("classpath:", ""));
-
-        // 通过Properties类加载IO流，最后关闭IO流
         try {
+            // 加载配置信息
             config.load(is);
         } catch (IOException e) {
             e.printStackTrace();
@@ -42,27 +48,32 @@ public class MYBeanDefinitionReader {
                 }
             }
         }
+        // 扫描scanPackage下的配置(注解)
         doScanner(config.getProperty(SCAN_PACKAGE));
     }
 
+    /**
+     * 扫描包，读取注解配置
+     * @param scanPackage 扫描路径
+     */
     private void doScanner(String scanPackage) {
-        // 1.获取需要扫描包的File对象
-        // 这里通过 getResource 方法返回的 URL 对象（指明scanPackage的绝对路径）来创建File
+        // 1. 创建扫描包的File对象
+        // 这里通过getResource方法返回的URL对象（指明scanPackage的绝对路径）来创建File
         URL url = this.getClass().getResource("/"+ scanPackage.replaceAll("\\.", "/"));
         File classpath = null;
         try {
+            // 需要用URLDecoder进行解码，否则会出现乱码
             classpath = new File(URLDecoder.decode(url.getFile(), "utf-8"));
         } catch (UnsupportedEncodingException e) {
             System.out.println("【DEBUG】----获取scanPackage路径乱码");
         }
 
-        // 遍历文件夹，寻找class文件
+        // 2. 递归扫描包, 保留.class文件
         for (File file : classpath.listFiles()) {
             if (file.isDirectory()) {
-                //  这里通过递归遍历文件夹
+                // 递归遍历文件夹
                 doScanner(scanPackage + "." + file.getName());
             } else {
-                // 不是class文件不管
                 if (!file.getName().endsWith("class")) {
                     continue;
                 }
@@ -74,31 +85,34 @@ public class MYBeanDefinitionReader {
         }
     }
 
+    /**
+     * 读取配置文件中配置
+     * @return BeanDefinition配置信息集合
+     */
     public List<MYBeanDefinition> loadBeanDefinitions() {
-        // 保存创建所有 BeanDefinition
         List<MYBeanDefinition> result = new ArrayList<MYBeanDefinition>();
         try {
             for (String className : registerBeanClasses) {
                 // 加载类
                 Class<?> clazz = Class.forName(className);
-                // 接口不能实例化，不处理 factoryBean
+                // 不处理FactoryBean
                 if (clazz.isInterface()) {
                     continue;
                 }
-
-                // 一个Class可以对应多个BeanDefinition
-                // 一个BeanDefinition对应一个Bean
-                // 一个Bean对应多个beanName
-                // 1.类
+                // 如果不是IOC容器管理则直接跳过
+                if (!clazz.isAnnotationPresent(MYService.class) &&
+                        !clazz.isAnnotationPresent(MYController.class) &&
+                                !clazz.isAnnotationPresent(MYComponent.class)) {
+                    continue;
+                }
+                // 创建BeanDefinition注入
                 result.add(doCreateBeanDefinition(toLowerFirstCase(clazz.getSimpleName()), clazz.getName()));
-                // 2.接口
                 Class<?>[] interfaces = clazz.getInterfaces();
                 for (Class<?> i : interfaces) {
-                    // 若一个接口有多个实现类，这里就会覆盖
-                    // 可以通过注入Bean时指定name解决
                     result.add(doCreateBeanDefinition(i.getName(), clazz.getName()));
                 }
                 // 3.自定义BeanName
+                // TODO
             }
         } catch (ClassNotFoundException e) {
             e.printStackTrace();
@@ -106,6 +120,12 @@ public class MYBeanDefinitionReader {
         return result;
     }
 
+    /**
+     * 实际创建BeanDefinition
+     * @param factoryBeanName 唯一标识
+     * @param beanClassName 全限定类名
+     * @return
+     */
     private MYBeanDefinition doCreateBeanDefinition(String factoryBeanName, String beanClassName) {
 
         MYBeanDefinition myBeanDefinition = new MYBeanDefinition();
@@ -116,7 +136,9 @@ public class MYBeanDefinitionReader {
         return myBeanDefinition;
     }
 
-    // 将第一个字母转为小写
+    /**
+     * 将第一个字母转为小写
+     */
     private String toLowerFirstCase(String simpleName) {
         char [] chars = simpleName.toCharArray();
         chars[0] += 32;
@@ -127,8 +149,4 @@ public class MYBeanDefinitionReader {
         return config;
     }
 
-    public static void main(String[] args) {
-        MYBeanDefinitionReader reader = new MYBeanDefinitionReader("classpath:application.properties");
-        reader.loadBeanDefinitions();
-    }
 }

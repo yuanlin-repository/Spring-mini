@@ -1,6 +1,7 @@
 package framework.beans.factory;
 
 public interface MYBeanFactory {
+
     /**
      * 通过 beanName 得到 bean 实例
      * @param beanName
@@ -16,4 +17,5 @@ public interface MYBeanFactory {
      * @throws Exception
      */
     Object getBean(Class<?> beanCLass) throws Exception;
+
 }

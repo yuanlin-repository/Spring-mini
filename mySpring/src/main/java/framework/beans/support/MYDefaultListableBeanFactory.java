@@ -10,7 +10,11 @@ import java.util.concurrent.ConcurrentHashMap;
  * IOC容器的默认实现（因此继承了AbstractApplicationContext），是扩展其余IOC容器的基础
  */
 public class MYDefaultListableBeanFactory extends MYAbstractApplicationContext {
-    //保存BeanDedifinition类信息
-    // 这里的key是factoryBeanName，因为我们选用的factoryBeanName作为Bean的唯一标识
+
+    /**
+     * 保存BeanDedifinition信息
+     * key : factoryBeanName (可以作为bean的唯一标识)
+     * val : bean实例对象
+     */
     protected final Map<String, MYBeanDefinition> beanDefinitionMap = new ConcurrentHashMap<String, MYBeanDefinition>();
 }

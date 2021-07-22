@@ -94,8 +94,8 @@ public class MyAction {
 		return null;
 	}
 
-	public void test(String name) {
-        System.out.println(queryService.query(name));
-    }
+	public void test(String name)	{
+		System.out.println(queryService.query(name));
+	}
 
 }

@@ -1,6 +1,10 @@
 package framework.context.support;
 
 public abstract class MYAbstractApplicationContext {
-    // 受保护，只提供给子类重写
+
+    /**
+     * 刷新IOC容器
+     * @throws Exception
+     */
     protected void refresh() throws Exception {}
 }

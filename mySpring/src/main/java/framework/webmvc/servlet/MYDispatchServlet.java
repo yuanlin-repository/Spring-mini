@@ -24,27 +24,33 @@ public class MYDispatchServlet extends HttpServlet {
 
     private final String CONTEXT_CONFIG_LOCATION = "contextConfigLocation";
 
-    // IOC 容器
+    /**
+     * IOC容器
+     */
     private MYApplicationContext context;
 
-    // 保存 HandlerMapping 的容器（用于判断能否处理外部请求）
+    /**
+     * 保存 HandlerMapping 的容器（用于判断能否处理外部请求）
+     */
     private List<MYHandlerMapping> handlerMappings = new ArrayList<MYHandlerMapping>();
 
-    // 保存 <HandlerMapping，HandlerAdpter> 映射关系的容器（用于获取执行方法的请求适配器）
+    /**
+     * 保存 <HandlerMapping，HandlerAdpter> 映射关系的容器（用于获取执行方法的请求适配器）
+     */
     private Map<MYHandlerMapping, MYHandlerAdapter> handereAdpters = new HashMap<MYHandlerMapping, MYHandlerAdapter>();
 
-    // 保存视图解析器的容器
+    /**
+     * 保存视图解析器的容器
+     */
     private List<MYViewResolver> viewResolvers = new ArrayList<MYViewResolver>();
 
     @Override
     public void init(ServletConfig config) throws ServletException {
-
-        // 1.初始化ApplicationContext ！！！
+        // 1. 初始化ApplicationContext
         // tomcat会加载web.xml并创建其中配置的servlet（即DispatchServlet），同时会执行init方法
         // 这里的config即web.xml配置信息，其中 contextConfigLocation 参数配置的是 application.properties 路径
         context = new MYApplicationContext(config.getInitParameter(CONTEXT_CONFIG_LOCATION));
-
-        // 2.初始化SpringMVC九大组件
+        // 2. 初始化SpringMVC九大组件
         initStrategies(context);
     }
 

@@ -18,15 +18,30 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class MYApplicationContext extends MYDefaultListableBeanFactory implements MYBeanFactory {
 
+    /**
+     * 配置文件路径 application.properties
+     */
     private String[] configLocations;
+
+    /**
+     * 用于读取配置
+     */
     private MYBeanDefinitionReader reader;
 
-    // 通用IOC容器，存的是 BeanWrapper
+    /**
+     * 存放beanWrapper
+     */
     private Map<String, MYBeanWrapper> factoryBeanInstanceCache = new ConcurrentHashMap<String, MYBeanWrapper>();
-    // 单例IOC容器，存的是实例对象（相当于缓存，避免重复创建Bean）
+
+    /**
+     * 存放单例bean实例
+     */
     private Map<String, Object> factoryBeanObejctCache = new ConcurrentHashMap<String, Object>();
 
-    // 传入配置文件，调用refresh方法
+    /**
+     * 调用refresh方法初始化容器
+     * @param configLocations
+     */
     public MYApplicationContext(String... configLocations) {
         this.configLocations = configLocations;
         try {
@@ -36,22 +51,28 @@ public class MYApplicationContext extends MYDefaultListableBeanFactory implement
         }
     }
 
+    /**
+     * 初始化容器
+     * @throws Exception
+     */
     @Override
     protected void refresh() throws Exception {
-        // 1.定位配置文件
+        // 1. 加载配置文件到BeanDefinition
         reader = new MYBeanDefinitionReader(configLocations);
-        // 2.加载，加载配置文件到内存（BeanDefinition）
         List<MYBeanDefinition> beanDefinitions = reader.loadBeanDefinitions();
-        // 3.注册，注册到配置信息到容器里面（伪IOC容器）
+        // 2. 将配置信息注册到容器
         doRegisterBeanDefiniton(beanDefinitions);
-        // 4.把不是延迟加载的类提前初始化
+        // 3. 初始化非懒加载实例
         doAutowired();
     }
 
+    /**
+     * 初始化非懒加载的bean
+     */
     private void doAutowired() {
         for (Map.Entry<String, MYBeanDefinition> entry : super.beanDefinitionMap.entrySet()) {
             String beanName = entry.getKey();
-            // beanDefinition默认isLazyInit是false，会提前将bean放入IOC容器
+            // 判断是否懒加载
             if (!entry.getValue().isLazyInit()) {
                 try {
                     getBean(beanName);
@@ -62,91 +83,86 @@ public class MYApplicationContext extends MYDefaultListableBeanFactory implement
         }
     }
 
+    /**
+     * 实际注册BeanDefinition
+     * @param beanDefinitions
+     * @throws Exception
+     */
     private void doRegisterBeanDefiniton(List<MYBeanDefinition> beanDefinitions) throws Exception {
         for (MYBeanDefinition beanDefinition : beanDefinitions) {
-            if (super.beanDefinitionMap.containsKey(beanDefinition.getFactoryBeanName())) {
+            if (beanDefinitionMap.containsKey(beanDefinition.getFactoryBeanName())) {
                 throw new Exception("【DEBUG】---- beanDefinition" + beanDefinition.getFactoryBeanName() + "已经存在!");
             }
-            super.beanDefinitionMap.put(beanDefinition.getFactoryBeanName(), beanDefinition);
-            super.beanDefinitionMap.put(beanDefinition.getBeanClassName(), beanDefinition);
+            beanDefinitionMap.put(beanDefinition.getFactoryBeanName(), beanDefinition);
+            beanDefinitionMap.put(beanDefinition.getBeanClassName(), beanDefinition);
         }
-
     }
 
-    @Override
-    // 依赖注入
-    // 1.读取BeanDefinition，通过反射创建Bean实例，包装成BeanWrapper，并放入IOC容器
-    // 2.对IOC容器管理的Bean进行依赖注入
     /**
-     * 调用getBean的时机
-     * 1.DispatchServlet创建IOC容器：refresh --> doAutowired
-     * 2.DispatchServlet创建HandlerMapping，要拿出所有Bean
-     * 3.手动getBean
+     * 获取bean实例
+     *      调用getBean的时机
+     *      1.DispatchServlet创建IOC容器：refresh --> doAutowired
+     *      2.DispatchServlet创建HandlerMapping，要拿出所有Bean
+     *      3.手动getBean
+     * @param beanName bean名称
+     * @return bean实例
+     * @throws Exception
      */
+    @Override
     public Object getBean(String beanName) throws Exception {
-        MYBeanDefinition myBeanDefinition = this.beanDefinitionMap.get(beanName);
-        Object instance = getSingleton(beanName);
-
+        MYBeanDefinition myBeanDefinition = null;
+        myBeanDefinition = this.beanDefinitionMap.get(beanName);
         // 如果已经初始化，则直接获取
+        Object instance = getSingleton(beanName);
         if (instance != null) {
             return instance;
         }
-        // 否则进行相关逻辑
-        // 创建前置事件处理器
+        // 前置事件处理器
         MYBeanPostProcessor beanPostProcessor = new MYBeanPostProcessor();
-
         // 在实例化bean之前进行一些操作
         beanPostProcessor.postProcessBeforeInitialization(instance, beanName);
-
-        // 判断是否是Spring管理的对象
-        // 只有Spring管理的对象才有BeanDefinition
+        // 没有这个bean则抛出异常
         if (myBeanDefinition == null) {
             throw new Exception("This Bean not exists");
         }
-
-        // 1.所有Bean都要封装成BeanWrapper，然后在BeanWrapper中再取出Bean实例
+        // 将Bean封装成BeanWrapper
         MYBeanWrapper beanWrapper = instantiteBean(beanName, myBeanDefinition);
-
-        // 2.将拿到的BeanWrapper放入IOC容器
+        // 将拿到的BeanWrapper放入IOC容器
         this.factoryBeanInstanceCache.put(beanName, beanWrapper);
-
-        // 在实例化bean之后进行一些动作
+        // 后置事件处理器
         beanPostProcessor.postProcessAfterInitialization(instance, beanName);
-
-        // 3.依赖注入
+        // 依赖注入, 对bean进行初始化, 反射注入bean的各项属性
         populateBean(beanName, myBeanDefinition, beanWrapper);
-
-        Object o = this.factoryBeanObejctCache.get(beanName);
         // 即使是单例模式有单例IOC容器，但获取Instance也要先封装为BeanWrapper，然后在通用容器中取
-        return o;
+        return this.factoryBeanObejctCache.get(beanName);
     }
 
+    /**
+     * 反射实现依赖注入
+     * @param beanName bean的名称
+     * @param myBeanDefinition beanDefinition信息
+     * @param myBeanWrapper bean的beanWrapper
+     */
     private void populateBean(String beanName, MYBeanDefinition myBeanDefinition, MYBeanWrapper myBeanWrapper) {
         Class<?> clazz = myBeanWrapper.getWrappedClass();
-        // 只有容器管理的bean才会给他依赖注入
-        if (!(clazz.isAnnotationPresent(MYController.class) || clazz.isAnnotationPresent(MYService.class))) { return; }
-
         Object instance = myBeanWrapper.getWrappedInstance();
         Field[] fields = clazz.getDeclaredFields();
         for (Field field : fields) {
-            if (!field.isAnnotationPresent(MYAutowired.class)) {continue;}
-
+            if (!field.isAnnotationPresent(MYAutowired.class)) {
+                continue;
+            }
             MYAutowired annotation = field.getAnnotation(MYAutowired.class);
-            // 自定义的beanName
+            // 获取自定义beanName
             String autowiredBeanName = annotation.value().trim();
+            // 如果没有自定义beanName则获取依赖bean的全限定类名
             if ("".equals(autowiredBeanName)) {
-                // 获取全限定类名
                 autowiredBeanName = field.getType().getName();
             }
-
             field.setAccessible(true);
-
             try {
-                // 因为要给当前Bean注入时，可能要注入的Bean还没初始化，因此就暂时不给这个字段注入
-                // 但是当正式使用时还会getBean一次，这时所有bean都初始化完成了，就可以注入了
                 String autowiredBeanFactoryName = beanDefinitionMap.get(autowiredBeanName).getFactoryBeanName();
-
                 Object dependBean = this.factoryBeanObejctCache.get(autowiredBeanFactoryName);
+                // 如果依赖的bean还没有初始化, 先初始化依赖的bean
                 if(dependBean == null) {
                     dependBean = this.factoryBeanInstanceCache.get(autowiredBeanName);
                     if (dependBean == null) {
@@ -155,6 +171,7 @@ public class MYApplicationContext extends MYDefaultListableBeanFactory implement
                         dependBean = ((MYBeanWrapper)dependBean).getWrappedInstance();
                     }
                 }
+                // 反射注入
                 field.set(instance, dependBean);
             } catch (Exception e) {
                 e.printStackTrace();
@@ -165,35 +182,38 @@ public class MYApplicationContext extends MYDefaultListableBeanFactory implement
         this.factoryBeanObejctCache.put(myBeanDefinition.getBeanClassName(), instance);
     }
 
+    /**
+     * 实例化bean(尚未初始化)
+     * @param beanName
+     * @param myBeanDefinition
+     * @return beanWrapper(包含尚未初始化的bean)
+     */
     private MYBeanWrapper instantiteBean(String beanName, MYBeanDefinition myBeanDefinition) {
-        // 1.拿到类的全限定类名
+        // 1. 拿到类的全限定类名
         String className = myBeanDefinition.getBeanClassName();
-        // 2.通过反射进行实例化
+        // 2. 通过反射进行实例化
         Object instance = null;
         try {
-
             Class<?> clazz = Class.forName(className);
             instance = clazz.newInstance();
-
-            //-------------------------AOP部分入口代码-----------------------
-
-
-            //----------------------------------------------------------------
-
-
-
+            //------------------------- AOP部分入口代码 -----------------------
+            // TODO
+            //---------------------------------------------------------------
         } catch (Exception e) {
             e.printStackTrace();
         }
+        // 3. 封装BeanWrapper
         MYBeanWrapper beanWrapper = new MYBeanWrapper(instance);
         this.factoryBeanInstanceCache.put(myBeanDefinition.getFactoryBeanName(), beanWrapper);
         this.factoryBeanInstanceCache.put(className, beanWrapper);
-        // 3.封装BeanWrapper
-        // 注：无论单例多例，都要先封装成BeanWrapper
-
         return beanWrapper;
     }
 
+    /**
+     * 从容器中直接获取bean
+     * @param beanName bean名称
+     * @return bean实例
+     */
     public Object getSingleton(String beanName) {
         Object o = this.factoryBeanObejctCache.get(beanName);
         if (o != null) {
@@ -202,11 +222,21 @@ public class MYApplicationContext extends MYDefaultListableBeanFactory implement
         return null;
     }
 
+    /**
+     * 通过class获取bean
+     * @param beanCLass
+     * @return bean实例
+     * @throws Exception
+     */
     @Override
     public Object getBean(Class<?> beanCLass) throws Exception {
         return null;
     }
 
+    /**
+     * 返回beanDefinitionName集合
+     * @return beanDefinitionName集合
+     */
     public String[] getBeanDefinitionNames() {
         return this.beanDefinitionMap.keySet().toArray(new String[this.beanDefinitionMap.size()]);
     }
